@@ -2,7 +2,7 @@
   "name": "Sheffield Budget",
   "short_name": "Budget",
   "description": "Monthly budget dashboard for Ben & Jo",
-  "start_url": "/budget-dashboard.html",
+  "start_url": "/ShuffieldBudget/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
