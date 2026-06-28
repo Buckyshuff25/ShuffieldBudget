@@ -182,6 +182,7 @@
   .modal {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 16px; padding: 28px; max-width: 480px; width: 90%;
+    position: relative;
   }
   .modal h3 { font-size: 1.1rem; margin-bottom: 8px; }
   .modal p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px; }
@@ -191,8 +192,16 @@
   .modal .cat-opt {
     padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px;
     background: var(--bg); color: var(--text); cursor: pointer; font-size: 0.85rem;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   }
-  .modal .cat-opt:hover { border-color: var(--accent); color: var(--accent); }
+  .modal .cat-opt:hover, .modal .cat-opt:active { border-color: var(--accent); color: var(--accent); }
+
+  .modal-close {
+    position: absolute; top: 12px; right: 16px; background: none; border: none;
+    color: var(--text-muted); font-size: 1.4rem; cursor: pointer; padding: 4px 8px;
+    line-height: 1;
+  }
+  .modal-close:hover { color: var(--text); }
 
   .form-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
 
@@ -284,6 +293,7 @@
 <!-- Category Modal -->
 <div class="modal-overlay" id="catModal">
   <div class="modal">
+    <button class="modal-close" onclick="closeCatModal()">&times;</button>
     <h3>Categorize Transaction</h3>
     <p id="catModalDesc"></p>
     <div class="cat-options" id="catOptions"></div>
@@ -300,6 +310,7 @@
 <!-- Budget Edit Modal -->
 <div class="modal-overlay" id="budgetModal">
   <div class="modal">
+    <button class="modal-close" onclick="document.getElementById('budgetModal').classList.remove('active')">&times;</button>
     <h3>Edit Budget Limit</h3>
     <p id="budgetModalCat"></p>
     <div class="form-row">
@@ -647,6 +658,11 @@ function categorizeNext() {
   showCatModal(uncat[0]);
 }
 
+function closeCatModal() {
+  document.getElementById('catModal').classList.remove('active');
+  pendingUncategorized = [];
+}
+
 function showCatModal(tx) {
   document.getElementById('catModalDesc').textContent =
     `"${tx.desc}" — $${tx.amount.toFixed(2)} on ${tx.date}`;
@@ -657,7 +673,14 @@ function showCatModal(tx) {
     const btn = document.createElement('button');
     btn.className = 'cat-opt';
     btn.textContent = cat;
-    btn.onclick = () => finishCategorize(tx, cat);
+    // Use both click and touchend for mobile reliability
+    const handler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      finishCategorize(tx, cat);
+    };
+    btn.addEventListener('click', handler);
+    btn.addEventListener('touchend', handler);
     opts.appendChild(btn);
   });
 
