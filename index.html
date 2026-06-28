@@ -49,6 +49,12 @@
 
   .header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 
+  .sync-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }
+  .sync-dot.connected { background: var(--green); }
+  .sync-dot.disconnected { background: var(--red); }
+
   .month-nav { display: flex; align-items: center; gap: 12px; }
 
   .month-nav button {
@@ -69,7 +75,6 @@
   .btn-danger { background: var(--red); color: var(--bg); font-size: 0.8rem; padding: 6px 12px; }
   .btn-small { padding: 4px 10px; font-size: 0.75rem; }
 
-  /* Summary Cards */
   .summary {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 16px; margin-bottom: 24px;
@@ -89,7 +94,6 @@
   .income { color: var(--green); }
   .expense { color: var(--red); }
 
-  /* Budget Buckets */
   .buckets-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 16px; margin-bottom: 24px;
@@ -105,9 +109,7 @@
   }
 
   .bucket-name { font-size: 0.9rem; font-weight: 600; }
-
   .bucket-remaining { font-size: 1.4rem; font-weight: 700; }
-
   .bucket-detail { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
 
   .bucket-bar {
@@ -129,7 +131,6 @@
   }
   .bucket-edit-budget:hover { color: var(--text); }
 
-  /* Main panels */
   .main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
   @media (max-width: 800px) { .main { grid-template-columns: 1fr; } }
 
@@ -140,7 +141,6 @@
 
   .panel h2 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: var(--text-muted); }
 
-  /* Transaction List */
   .tx-list { max-height: 500px; overflow-y: auto; }
   .tx-list::-webkit-scrollbar { width: 6px; }
   .tx-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -162,7 +162,6 @@
   .tx-meta { font-size: 0.7rem; color: var(--text-muted); }
   .tx-amount { font-size: 0.9rem; font-weight: 600; white-space: nowrap; }
 
-  /* Drop zone */
   .drop-zone {
     border: 2px dashed var(--border); border-radius: 12px; padding: 40px 20px;
     text-align: center; color: var(--text-muted); cursor: pointer;
@@ -174,7 +173,6 @@
   .drop-zone p { margin-bottom: 8px; font-size: 0.95rem; }
   .drop-zone small { font-size: 0.75rem; }
 
-  /* Modal */
   .modal-overlay {
     display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center;
@@ -208,11 +206,6 @@
     text-align: center; color: var(--text-muted); padding: 40px 20px; font-size: 0.9rem;
   }
 
-  .tag {
-    display: inline-block; padding: 2px 8px; border-radius: 4px;
-    font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
-  }
-
   .uncategorized-banner {
     background: var(--surface); border: 1px solid var(--orange); border-radius: 12px;
     padding: 16px 20px; margin-bottom: 24px; display: flex; align-items: center;
@@ -221,22 +214,12 @@
   .uncategorized-banner span { color: var(--orange); font-weight: 500; font-size: 0.9rem; }
 
   .actions-row { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-
-  /* Budget edit inline */
-  .budget-inline {
-    display: inline-flex; align-items: center; gap: 4px;
-  }
-  .budget-inline input {
-    width: 70px; padding: 4px 6px; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 6px; color: var(--text); font-size: 0.8rem; text-align: right;
-  }
-  .budget-inline input:focus { outline: none; border-color: var(--accent); }
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>Budget Dashboard</h1>
+    <h1>Budget Dashboard <span class="sync-dot disconnected" id="syncDot" title="Sync status"></span></h1>
     <div class="header-right">
       <div class="month-nav">
         <button onclick="changeMonth(-1)">&larr;</button>
@@ -246,7 +229,6 @@
     </div>
   </header>
 
-  <!-- Summary Cards -->
   <div class="summary">
     <div class="card">
       <div class="card-label">Total Budget</div>
@@ -267,18 +249,14 @@
     </div>
   </div>
 
-  <!-- Uncategorized banner -->
   <div class="uncategorized-banner" id="uncatBanner" style="display:none">
     <span id="uncatText"></span>
     <button class="btn btn-primary btn-small" onclick="categorizeNext()">Categorize Now</button>
   </div>
 
-  <!-- Budget Buckets -->
   <div class="buckets-grid" id="bucketsGrid"></div>
 
-  <!-- Main two-column -->
   <div class="main">
-    <!-- Left: Import -->
     <div style="display:flex;flex-direction:column;gap:20px;">
       <div class="panel">
         <h2>Import Transactions</h2>
@@ -294,7 +272,6 @@
       </div>
     </div>
 
-    <!-- Right: Transaction list -->
     <div style="display:flex;flex-direction:column;gap:20px;">
       <div class="panel">
         <h2>Transactions</h2>
@@ -332,7 +309,37 @@
   </div>
 </div>
 
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
 <script>
+// ============ FIREBASE INIT ============
+const firebaseConfig = {
+  apiKey: "AIzaSyCjMVO2NpkHcrkLz_5j6T-QNe2kw0CxPvo",
+  authDomain: "shuffield-budget.firebaseapp.com",
+  databaseURL: "https://shuffield-budget-default-rtdb.firebaseio.com",
+  projectId: "shuffield-budget",
+  storageBucket: "shuffield-budget.firebasestorage.app",
+  messagingSenderId: "715785142448",
+  appId: "1:715785142448:web:5519773e515d306a0dbb75"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// Connection status indicator
+db.ref('.info/connected').on('value', snap => {
+  const dot = document.getElementById('syncDot');
+  if (snap.val() === true) {
+    dot.className = 'sync-dot connected';
+    dot.title = 'Synced';
+  } else {
+    dot.className = 'sync-dot disconnected';
+    dot.title = 'Offline';
+  }
+});
+
 // ============ BUDGET CATEGORIES ============
 const BUDGETS_DEFAULT = {
   'Groceries': 750,
@@ -377,7 +384,6 @@ const CAT_COLORS = {
   'Uncategorized': '#94a3b8',
 };
 
-// Keyword map for auto-categorization
 const CAT_KEYWORDS = {
   'Groceries': ['grocery','trader joe','whole foods','aldi','kroger','safeway','costco','walmart supercenter','publix','heb','wegmans','sprouts','food lion','piggly','supermarket','meijer','sam\'s club','bj\'s','market basket','giant','stop & shop','food','fresh'],
   'Car Fuel': ['gas','shell','chevron','exxon','bp','marathon','sunoco','valero','wawa','speedway','fuel','citgo','circle k','murphy','racetrac','quiktrip','love\'s','pilot','sheetz'],
@@ -403,50 +409,72 @@ let currentMonth = new Date();
 currentMonth.setDate(1);
 let pendingUncategorized = [];
 let editingBudgetCat = null;
+let cachedTx = [];
+let cachedBudgets = { ...BUDGETS_DEFAULT };
+let cachedLearned = {};
 
-// ============ STORAGE ============
-function getKey() {
-  return `budget_${currentMonth.getFullYear()}_${currentMonth.getMonth()}`;
+// ============ FIREBASE STORAGE ============
+function monthKey() {
+  return `${currentMonth.getFullYear()}_${currentMonth.getMonth()}`;
 }
 
-function loadTx() {
-  return JSON.parse(localStorage.getItem(getKey()) || '[]');
+function fbSaveTx(monthKeyStr, txs) {
+  db.ref('transactions/' + monthKeyStr).set(txs);
 }
 
-function saveTx(txs) {
-  localStorage.setItem(getKey(), JSON.stringify(txs));
+function fbSaveBudgets(b) {
+  db.ref('budgets').set(b);
 }
 
-function loadBudgets() {
-  const raw = localStorage.getItem('budget_limits');
-  const saved = raw ? JSON.parse(raw) : {};
-  // Merge in any new default categories that aren't saved yet
-  let changed = false;
-  for (const [cat, amt] of Object.entries(BUDGETS_DEFAULT)) {
-    if (!(cat in saved)) { saved[cat] = amt; changed = true; }
+function fbSaveLearned(obj) {
+  db.ref('learned').set(obj);
+}
+
+// ============ REAL-TIME LISTENERS ============
+let currentTxListener = null;
+
+function listenToMonth() {
+  // Detach previous listener
+  if (currentTxListener) {
+    db.ref('transactions/' + currentTxListener).off();
   }
-  if (changed || !raw) localStorage.setItem('budget_limits', JSON.stringify(saved));
-  return saved;
+  const mk = monthKey();
+  currentTxListener = mk;
+
+  db.ref('transactions/' + mk).on('value', snap => {
+    cachedTx = snap.val() || [];
+    render();
+  });
 }
 
-function saveBudgets(b) {
-  localStorage.setItem('budget_limits', JSON.stringify(b));
-}
+// Budget listener (always on)
+db.ref('budgets').on('value', snap => {
+  const val = snap.val();
+  if (val) {
+    // Merge defaults for any missing keys
+    let changed = false;
+    for (const [cat, amt] of Object.entries(BUDGETS_DEFAULT)) {
+      if (!(cat in val)) { val[cat] = amt; changed = true; }
+    }
+    cachedBudgets = val;
+    if (changed) fbSaveBudgets(val);
+  } else {
+    // First time — seed defaults
+    cachedBudgets = { ...BUDGETS_DEFAULT };
+    fbSaveBudgets(cachedBudgets);
+  }
+  render();
+});
 
-function loadLearned() {
-  return JSON.parse(localStorage.getItem('budget_learned') || '{}');
-}
-
-function saveLearned(obj) {
-  localStorage.setItem('budget_learned', JSON.stringify(obj));
-}
+// Learned categories listener (always on)
+db.ref('learned').on('value', snap => {
+  cachedLearned = snap.val() || {};
+});
 
 // ============ AUTO-CATEGORIZE ============
 function autoCategory(desc) {
   const lower = desc.toLowerCase();
-  // Check learned mappings first
-  const learned = loadLearned();
-  if (learned[lower]) return learned[lower];
+  if (cachedLearned[lower]) return cachedLearned[lower];
 
   for (const [cat, keywords] of Object.entries(CAT_KEYWORDS)) {
     for (const kw of keywords) {
@@ -457,17 +485,14 @@ function autoCategory(desc) {
 }
 
 function learnCategory(desc, cat) {
-  const learned = loadLearned();
-  learned[desc.toLowerCase().trim()] = cat;
-  saveLearned(learned);
+  cachedLearned[desc.toLowerCase().trim()] = cat;
+  fbSaveLearned(cachedLearned);
 }
 
 // ============ CAPITAL ONE CSV IMPORT ============
-// Capital One format: Transaction Date, Posted Date, Card No., Description, Category, Debit, Credit
 function parseCapitalOneCSV(text) {
   const lines = text.split('\n');
   const transactions = [];
-  // Find header row
   let headerIdx = 0;
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].toLowerCase().includes('transaction date')) { headerIdx = i; break; }
@@ -488,13 +513,11 @@ function parseCapitalOneCSV(text) {
 
     if (!desc) continue;
 
-    // Use posted date for month bucketing, fall back to transaction date
     const normalizedDate = normalizeDate(postedDate) || normalizeDate(transDate);
     if (!normalizedDate) continue;
 
     const amount = debit > 0 ? debit : credit;
     const type = credit > 0 ? 'credit' : 'expense';
-
     const category = autoCategory(desc);
 
     transactions.push({
@@ -524,10 +547,8 @@ function parseCSVLine(line) {
 }
 
 function normalizeDate(dateStr) {
-  // Try MM/DD/YYYY
   let m = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
-  // Try YYYY-MM-DD
   m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (m) return dateStr;
   return null;
@@ -542,11 +563,11 @@ function handleImport(e) {
     const newTxs = parseCapitalOneCSV(ev.target.result);
     if (newTxs.length === 0) { alert('No transactions found in CSV.'); return; }
 
-    // Group transactions by month (based on posted date) and save to correct month bucket
+    // Group by month
     const byMonth = {};
     newTxs.forEach(tx => {
       const d = new Date(tx.date + 'T00:00:00');
-      const key = `budget_${d.getFullYear()}_${d.getMonth()}`;
+      const key = `${d.getFullYear()}_${d.getMonth()}`;
       if (!byMonth[key]) byMonth[key] = { year: d.getFullYear(), month: d.getMonth(), txs: [] };
       byMonth[key].txs.push(tx);
     });
@@ -554,36 +575,41 @@ function handleImport(e) {
     let added = 0;
     let totalUncat = 0;
     let latestMonth = null;
+    let pendingWrites = Object.keys(byMonth).length;
 
     Object.entries(byMonth).forEach(([key, group]) => {
-      const existing = JSON.parse(localStorage.getItem(key) || '[]');
-      const existingKeys = new Set(existing.map(t => `${t.date}|${t.desc}|${t.amount}`));
+      // Read current data from Firebase, merge, then write back
+      db.ref('transactions/' + key).once('value', snap => {
+        const existing = snap.val() || [];
+        const existingKeys = new Set(existing.map(t => `${t.date}|${t.desc}|${t.amount}`));
 
-      group.txs.forEach(tx => {
-        const k = `${tx.date}|${tx.desc}|${tx.amount}`;
-        if (!existingKeys.has(k)) {
-          existing.push(tx);
-          existingKeys.add(k);
-          added++;
+        group.txs.forEach(tx => {
+          const k = `${tx.date}|${tx.desc}|${tx.amount}`;
+          if (!existingKeys.has(k)) {
+            existing.push(tx);
+            existingKeys.add(k);
+            added++;
+          }
+        });
+
+        db.ref('transactions/' + key).set(existing);
+        totalUncat += existing.filter(t => !t.category && t.type === 'expense').length;
+
+        if (!latestMonth || (group.year > latestMonth.year) ||
+            (group.year === latestMonth.year && group.month > latestMonth.month)) {
+          latestMonth = group;
+        }
+
+        pendingWrites--;
+        if (pendingWrites === 0) {
+          if (latestMonth) {
+            currentMonth = new Date(latestMonth.year, latestMonth.month, 1);
+            listenToMonth();
+          }
+          alert(`Imported ${added} new transaction${added !== 1 ? 's' : ''}${totalUncat > 0 ? `. ${totalUncat} need categorizing.` : '.'}`);
         }
       });
-
-      localStorage.setItem(key, JSON.stringify(existing));
-      totalUncat += existing.filter(t => !t.category && t.type === 'expense').length;
-
-      if (!latestMonth || (group.year > latestMonth.year) ||
-          (group.year === latestMonth.year && group.month > latestMonth.month)) {
-        latestMonth = group;
-      }
     });
-
-    // Navigate to the latest month that had imports
-    if (latestMonth) {
-      currentMonth = new Date(latestMonth.year, latestMonth.month, 1);
-    }
-
-    render();
-    alert(`Imported ${added} new transaction${added !== 1 ? 's' : ''}${totalUncat > 0 ? `. ${totalUncat} need categorizing.` : '.'}`);
   };
   reader.readAsText(file);
   e.target.value = '';
@@ -606,7 +632,6 @@ dropZone.addEventListener('drop', e => {
   dropZone.classList.remove('dragover');
   const file = e.dataTransfer.files[0];
   if (file && file.name.endsWith('.csv')) {
-    // Trigger same handler
     const dt = new DataTransfer();
     dt.items.add(file);
     document.getElementById('csvInput').files = dt.files;
@@ -616,10 +641,8 @@ dropZone.addEventListener('drop', e => {
 
 // ============ CATEGORIZE FLOW ============
 function categorizeNext() {
-  const txs = loadTx();
-  const uncat = txs.filter(t => !t.category && t.type === 'expense');
+  const uncat = cachedTx.filter(t => !t.category && t.type === 'expense');
   if (uncat.length === 0) { render(); return; }
-
   pendingUncategorized = uncat;
   showCatModal(uncat[0]);
 }
@@ -630,8 +653,7 @@ function showCatModal(tx) {
 
   const opts = document.getElementById('catOptions');
   opts.innerHTML = '';
-  const budgets = loadBudgets();
-  Object.keys(budgets).forEach(cat => {
+  Object.keys(cachedBudgets).forEach(cat => {
     const btn = document.createElement('button');
     btn.className = 'cat-opt';
     btn.textContent = cat;
@@ -645,33 +667,26 @@ function showCatModal(tx) {
 }
 
 function finishCategorize(tx, cat) {
-  const txs = loadTx();
-  const found = txs.find(t => t.id === tx.id);
+  const found = cachedTx.find(t => t.id === tx.id);
   if (found) {
     found.category = cat;
-    saveTx(txs);
+    fbSaveTx(monthKey(), cachedTx);
     learnCategory(found.desc, cat);
   }
 
-  // Add budget/color if new category
   if (!CAT_COLORS[cat]) {
     CAT_COLORS[cat] = `hsl(${Math.floor(Math.random()*360)}, 70%, 60%)`;
   }
-  const budgets = loadBudgets();
-  if (!budgets[cat]) { budgets[cat] = 0; saveBudgets(budgets); }
+  if (!cachedBudgets[cat]) {
+    cachedBudgets[cat] = 0;
+    fbSaveBudgets(cachedBudgets);
+  }
 
-  // Move to next uncategorized
   pendingUncategorized = pendingUncategorized.filter(t => t.id !== tx.id);
-  if (pendingUncategorized.length > 0) {
-    // Refresh the remaining from storage in case categories changed
-    const freshTxs = loadTx();
-    const nextUncat = freshTxs.filter(t => !t.category && t.type === 'expense');
-    if (nextUncat.length > 0) {
-      showCatModal(nextUncat[0]);
-      pendingUncategorized = nextUncat;
-    } else {
-      document.getElementById('catModal').classList.remove('active');
-    }
+  const nextUncat = cachedTx.filter(t => !t.category && t.type === 'expense');
+  if (nextUncat.length > 0) {
+    showCatModal(nextUncat[0]);
+    pendingUncategorized = nextUncat;
   } else {
     document.getElementById('catModal').classList.remove('active');
   }
@@ -682,19 +697,16 @@ function submitCustomCat() {
   const v = document.getElementById('customCat').value.trim();
   if (!v) return;
   const txId = parseFloat(document.getElementById('catModal').dataset.txId);
-  const txs = loadTx();
-  const tx = txs.find(t => t.id === txId) || pendingUncategorized[0];
+  const tx = cachedTx.find(t => t.id === txId) || pendingUncategorized[0];
   if (tx) finishCategorize(tx, v);
 }
 
 function skipCategorize() {
   if (pendingUncategorized.length > 1) {
     pendingUncategorized.shift();
-    const txs = loadTx();
-    const nextUncat = txs.filter(t => !t.category && t.type === 'expense');
-    const remaining = nextUncat.filter(t => t.id !== pendingUncategorized[0]?.id);
+    const nextUncat = cachedTx.filter(t => !t.category && t.type === 'expense');
     if (nextUncat.length > 0) {
-      showCatModal(nextUncat.find(t => t.id === pendingUncategorized[0]?.id) || nextUncat[0]);
+      showCatModal(nextUncat[0]);
       return;
     }
   }
@@ -706,17 +718,15 @@ function skipCategorize() {
 function editBudget(cat) {
   editingBudgetCat = cat;
   document.getElementById('budgetModalCat').textContent = cat;
-  const budgets = loadBudgets();
-  document.getElementById('budgetModalInput').value = budgets[cat] || '';
+  document.getElementById('budgetModalInput').value = cachedBudgets[cat] || '';
   document.getElementById('budgetModal').classList.add('active');
 }
 
 function saveBudgetModal() {
   const val = parseFloat(document.getElementById('budgetModalInput').value);
   if (isNaN(val) || val < 0) return;
-  const budgets = loadBudgets();
-  budgets[editingBudgetCat] = val;
-  saveBudgets(budgets);
+  cachedBudgets[editingBudgetCat] = val;
+  fbSaveBudgets(cachedBudgets);
   document.getElementById('budgetModal').classList.remove('active');
   render();
 }
@@ -724,21 +734,19 @@ function saveBudgetModal() {
 // ============ NAVIGATION ============
 function changeMonth(dir) {
   currentMonth.setMonth(currentMonth.getMonth() + dir);
-  render();
+  listenToMonth();
 }
 
 function clearMonth() {
   if (!confirm('Delete all transactions for this month?')) return;
-  saveTx([]);
-  render();
+  fbSaveTx(monthKey(), []);
 }
 
 // ============ EXPORT ============
 function exportCSV() {
-  const txs = loadTx();
-  if (txs.length === 0) return alert('No transactions to export.');
+  if (cachedTx.length === 0) return alert('No transactions to export.');
   let csv = 'Date,Description,Amount,Type,Category\n';
-  txs.forEach(t => {
+  cachedTx.forEach(t => {
     csv += `${t.date},"${t.desc}",${t.amount},${t.type},${t.category || 'Uncategorized'}\n`;
   });
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -761,23 +769,21 @@ function esc(s) {
 }
 
 function render() {
-  const txs = loadTx();
-  const budgets = loadBudgets();
+  const txs = cachedTx;
+  const budgets = cachedBudgets;
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   document.getElementById('monthLabel').textContent =
     `${monthNames[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
 
-  // Compute category totals (expenses only)
   const catTotals = {};
   txs.filter(t => t.type === 'expense').forEach(t => {
     const cat = t.category || 'Uncategorized';
     catTotals[cat] = (catTotals[cat] || 0) + t.amount;
   });
 
-  // Summary
   const totalBudget = Object.values(budgets).reduce((s, v) => s + v, 0);
-  const totalSpent = Object.entries(catTotals).filter(([k]) => k !== 'Uncategorized')
-    .reduce((s, [_, v]) => s + v, 0) + (catTotals['Uncategorized'] || 0);
+  const totalSpent = Object.entries(catTotals)
+    .reduce((s, [_, v]) => s + v, 0);
   const totalRemaining = totalBudget - totalSpent;
 
   document.getElementById('totalBudget').textContent = fmt(totalBudget);
@@ -796,7 +802,6 @@ function render() {
   const dailyAvg = daysSoFar > 0 ? totalSpent / daysSoFar : 0;
   document.getElementById('dailyAvg').textContent = `~${fmt(dailyAvg)}/day`;
 
-  // Uncategorized banner
   const uncatCount = txs.filter(t => !t.category && t.type === 'expense').length;
   const banner = document.getElementById('uncatBanner');
   if (uncatCount > 0) {
@@ -807,7 +812,6 @@ function render() {
     banner.style.display = 'none';
   }
 
-  // Budget Buckets
   const grid = document.getElementById('bucketsGrid');
   const bucketCats = Object.keys(budgets);
 
@@ -839,7 +843,6 @@ function render() {
       </div>`;
   }).join('');
 
-  // Transaction list
   const txList = document.getElementById('txList');
   const expenses = txs.filter(t => t.type === 'expense')
     .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
@@ -886,7 +889,7 @@ if ('serviceWorker' in navigator) {
 }
 
 // ============ INIT ============
-render();
+listenToMonth();
 </script>
 </body>
 </html>
