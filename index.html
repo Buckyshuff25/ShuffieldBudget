@@ -700,14 +700,14 @@ dropZone.addEventListener('drop', e => {
 });
 
 // ============ CATEGORIZE FLOW ============
-let catProcessing = false;
+// Track current transaction by its array index — immune to Firebase replacing cachedTx
+let currentCatIndex = -1;
 let currentCatTx = null;
 
 function categorizeNext() {
-  const uncat = cachedTx.filter(t => !t.category && t.type === 'expense');
-  if (uncat.length === 0) { render(); return; }
-  pendingUncategorized = uncat;
-  showCatModal(uncat[0]);
+  const idx = cachedTx.findIndex(t => !t.category && t.type === 'expense');
+  if (idx === -1) { render(); return; }
+  showCatModal(idx);
 }
 
 function closeCatModal() {
@@ -715,24 +715,20 @@ function closeCatModal() {
   pendingUncategorized = [];
   selectedCat = null;
   currentCatTx = null;
-  catProcessing = false;
+  currentCatIndex = -1;
 }
 
 function confirmCategorize() {
-  if (catProcessing) return;
   if (!selectedCat) { alert('Please select a category first.'); return; }
-  catProcessing = true;
-  const tx = currentCatTx;
-  const cat = selectedCat;
-  if (tx) {
-    finishCategorize(tx, cat);
-  }
-  catProcessing = false;
+  applyCategoryAndAdvance(selectedCat);
 }
 
-function showCatModal(tx) {
+function showCatModal(idx) {
   selectedCat = null;
-  currentCatTx = tx;
+  currentCatIndex = idx;
+  currentCatTx = cachedTx[idx];
+  const tx = currentCatTx;
+
   document.getElementById('catModalDesc').textContent =
     `"${tx.desc}" — $${tx.amount.toFixed(2)} on ${tx.date}`;
 
@@ -756,17 +752,14 @@ function showCatModal(tx) {
   document.getElementById('customCat').value = '';
 }
 
-function finishCategorize(tx, cat) {
-  // Find by matching date+desc+amount since IDs can lose precision through Firebase
-  const found = cachedTx.find(t =>
-    t.date === tx.date && t.desc === tx.desc && t.amount === tx.amount && !t.category
-  ) || cachedTx.find(t => t.id === tx.id);
-
-  if (found) {
-    found.category = cat;
-    learnCategory(found.desc, cat);
+function applyCategoryAndAdvance(cat) {
+  // 1. Apply category directly by index — no searching needed
+  if (currentCatIndex >= 0 && currentCatIndex < cachedTx.length) {
+    cachedTx[currentCatIndex].category = cat;
+    learnCategory(cachedTx[currentCatIndex].desc, cat);
   }
 
+  // 2. Ensure color and budget exist for this category
   if (!CAT_COLORS[cat]) {
     CAT_COLORS[cat] = `hsl(${Math.floor(Math.random()*360)}, 70%, 60%)`;
   }
@@ -775,45 +768,46 @@ function finishCategorize(tx, cat) {
     fbSaveBudgets(cachedBudgets);
   }
 
-  // Find next uncategorized BEFORE Firebase save replaces cachedTx
-  const nextUncat = cachedTx.filter(t => !t.category && t.type === 'expense');
-  selectedCat = null;
+  // 3. Find next uncategorized BEFORE saving (save triggers listener that replaces cachedTx)
+  const nextIdx = cachedTx.findIndex(t => !t.category && t.type === 'expense');
 
-  // Now save to Firebase (this triggers listener which replaces cachedTx and calls render)
+  // 4. Save to Firebase
+  selectedCat = null;
   fbSaveTx(monthKey(), cachedTx);
 
-  // Advance to next or close modal
-  if (nextUncat.length > 0) {
-    pendingUncategorized = nextUncat;
-    showCatModal(nextUncat[0]);
+  // 5. Advance to next or close
+  if (nextIdx !== -1) {
+    showCatModal(nextIdx);
   } else {
     document.getElementById('catModal').classList.remove('active');
-    pendingUncategorized = [];
     currentCatTx = null;
+    currentCatIndex = -1;
+    pendingUncategorized = [];
   }
 }
 
 function submitCustomCat() {
-  if (catProcessing) return;
   const v = document.getElementById('customCat').value.trim();
   if (!v) return;
-  catProcessing = true;
-  const tx = currentCatTx;
-  if (tx) finishCategorize(tx, v);
-  catProcessing = false;
+  applyCategoryAndAdvance(v);
 }
 
 function skipCategorize() {
-  const nextUncat = cachedTx.filter(t =>
-    !t.category && t.type === 'expense' && (!currentCatTx || t.id !== currentCatTx.id)
-  );
-  if (nextUncat.length > 0) {
-    pendingUncategorized = nextUncat;
-    showCatModal(nextUncat[0]);
+  // Find next uncategorized that isn't the current one
+  let nextIdx = -1;
+  for (let i = 0; i < cachedTx.length; i++) {
+    if (i !== currentCatIndex && !cachedTx[i].category && cachedTx[i].type === 'expense') {
+      nextIdx = i;
+      break;
+    }
+  }
+  if (nextIdx !== -1) {
+    showCatModal(nextIdx);
   } else {
     document.getElementById('catModal').classList.remove('active');
     pendingUncategorized = [];
     currentCatTx = null;
+    currentCatIndex = -1;
   }
 }
 
@@ -926,13 +920,10 @@ function confirmSplit() {
     return;
   }
 
-  // Remove original transaction, add split transactions
-  const txIdx = cachedTx.findIndex(t =>
-    t.date === tx.date && t.desc === tx.desc && t.amount === tx.amount
-  );
-  if (txIdx === -1) { alert('Transaction not found.'); return; }
-
-  cachedTx.splice(txIdx, 1);
+  // Remove original transaction by index, add split transactions
+  if (currentCatIndex >= 0 && currentCatIndex < cachedTx.length) {
+    cachedTx.splice(currentCatIndex, 1);
+  }
   splits.forEach(s => {
     cachedTx.push({
       id: Date.now() + Math.random(),
@@ -944,24 +935,24 @@ function confirmSplit() {
     });
   });
 
-  fbSaveTx(monthKey(), cachedTx);
   splits.forEach(s => learnCategory(tx.desc, s.category));
 
-  document.getElementById('splitModal').classList.remove('active');
-  currentCatTx = null;
-  selectedCat = null;
-  render();
+  // Find next uncategorized BEFORE Firebase save
+  const nextIdx = cachedTx.findIndex(t => !t.category && t.type === 'expense');
 
-  // Check for more uncategorized
-  setTimeout(() => {
-    const nextUncat = cachedTx.filter(t => !t.category && t.type === 'expense');
-    if (nextUncat.length > 0) {
-      pendingUncategorized = nextUncat;
-      showCatModal(nextUncat[0]);
-    } else {
-      pendingUncategorized = [];
-    }
-  }, 50);
+  fbSaveTx(monthKey(), cachedTx);
+
+  document.getElementById('splitModal').classList.remove('active');
+  selectedCat = null;
+
+  if (nextIdx !== -1) {
+    showCatModal(nextIdx);
+  } else {
+    document.getElementById('catModal').classList.remove('active');
+    currentCatTx = null;
+    currentCatIndex = -1;
+    pendingUncategorized = [];
+  }
 }
 
 // ============ BUDGET EDIT ============
