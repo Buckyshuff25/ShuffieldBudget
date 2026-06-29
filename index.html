@@ -187,12 +187,15 @@
   .modal h3 { font-size: 1.1rem; margin-bottom: 8px; }
   .modal p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px; }
 
-  .modal .cat-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .modal .cat-options {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 16px;
+  }
 
   .modal .cat-opt {
-    padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px;
-    background: var(--bg); color: var(--text); cursor: pointer; font-size: 0.85rem;
+    padding: 6px 4px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--text); cursor: pointer; font-size: 0.75rem;
     -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .modal .cat-opt:hover, .modal .cat-opt:active { border-color: var(--accent); color: var(--accent); }
   .modal .cat-opt.selected { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
@@ -224,6 +227,31 @@
   .uncategorized-banner span { color: var(--orange); font-weight: 500; font-size: 0.9rem; }
 
   .actions-row { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+
+  .split-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .split-row {
+    display: flex; gap: 6px; align-items: center;
+  }
+  .split-row select {
+    flex: 1; padding: 8px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 0.85rem;
+    -webkit-appearance: none; appearance: none;
+  }
+  .split-row select:focus { outline: none; border-color: var(--accent); }
+  .split-row input[type="number"] {
+    width: 90px; padding: 8px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 0.85rem; text-align: right;
+  }
+  .split-row input:focus { outline: none; border-color: var(--accent); }
+  .split-row .split-remove {
+    background: none; border: none; color: var(--red); cursor: pointer;
+    font-size: 1.2rem; padding: 4px 6px; line-height: 1;
+  }
+  .split-remaining {
+    font-size: 0.85rem; color: var(--text-muted); text-align: right; margin-bottom: 8px;
+  }
+  .split-remaining.over { color: var(--red); }
+  .split-remaining.exact { color: var(--green); }
 </style>
 </head>
 <body>
@@ -299,8 +327,9 @@
     <p id="catModalDesc"></p>
     <div class="cat-options" id="catOptions"></div>
     <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;">
-      <button class="btn btn-primary" onclick="confirmCategorize()" style="flex:1;max-width:200px;padding:12px 20px;font-size:1rem;">Categorize</button>
-      <button class="btn btn-secondary" onclick="skipCategorize()" style="padding:12px 20px;font-size:1rem;">Skip</button>
+      <button class="btn btn-primary" onclick="confirmCategorize()" style="flex:1;max-width:160px;padding:12px 16px;font-size:1rem;">Categorize</button>
+      <button class="btn btn-secondary" onclick="openSplitModal()" style="padding:12px 16px;font-size:1rem;">Split</button>
+      <button class="btn btn-secondary" onclick="skipCategorize()" style="padding:12px 16px;font-size:1rem;">Skip</button>
     </div>
     <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
       <div class="form-row">
@@ -320,6 +349,21 @@
     <div class="form-row">
       <input type="number" id="budgetModalInput" placeholder="Monthly budget" step="1" min="0">
       <button class="btn btn-primary btn-small" onclick="saveBudgetModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Split Transaction Modal -->
+<div class="modal-overlay" id="splitModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeSplitModal()">&times;</button>
+    <h3>Split Transaction</h3>
+    <p id="splitModalDesc"></p>
+    <div class="split-rows" id="splitRows"></div>
+    <div class="split-remaining" id="splitRemaining"></div>
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <button class="btn btn-secondary btn-small" onclick="addSplitRow()">+ Add Row</button>
+      <button class="btn btn-primary" onclick="confirmSplit()" style="padding:10px 20px;">Save Split</button>
     </div>
   </div>
 </div>
@@ -656,6 +700,9 @@ dropZone.addEventListener('drop', e => {
 });
 
 // ============ CATEGORIZE FLOW ============
+let catProcessing = false;
+let currentCatTx = null;
+
 function categorizeNext() {
   const uncat = cachedTx.filter(t => !t.category && t.type === 'expense');
   if (uncat.length === 0) { render(); return; }
@@ -667,18 +714,25 @@ function closeCatModal() {
   document.getElementById('catModal').classList.remove('active');
   pendingUncategorized = [];
   selectedCat = null;
+  currentCatTx = null;
+  catProcessing = false;
 }
 
 function confirmCategorize() {
+  if (catProcessing) return;
   if (!selectedCat) { alert('Please select a category first.'); return; }
-  const txId = parseFloat(document.getElementById('catModal').dataset.txId);
-  const tx = cachedTx.find(t => t.id === txId) || pendingUncategorized[0];
-  if (tx) finishCategorize(tx, selectedCat);
-  selectedCat = null;
+  catProcessing = true;
+  const tx = currentCatTx;
+  const cat = selectedCat;
+  if (tx) {
+    finishCategorize(tx, cat);
+  }
+  catProcessing = false;
 }
 
 function showCatModal(tx) {
   selectedCat = null;
+  currentCatTx = tx;
   document.getElementById('catModalDesc').textContent =
     `"${tx.desc}" — $${tx.amount.toFixed(2)} on ${tx.date}`;
 
@@ -688,26 +742,26 @@ function showCatModal(tx) {
     const btn = document.createElement('button');
     btn.className = 'cat-opt';
     btn.textContent = cat;
-    const handler = (e) => {
+    btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      // Deselect all, select this one
       opts.querySelectorAll('.cat-opt').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       selectedCat = cat;
-    };
-    btn.addEventListener('click', handler);
-    btn.addEventListener('touchend', handler);
+    });
     opts.appendChild(btn);
   });
 
   document.getElementById('catModal').classList.add('active');
   document.getElementById('customCat').value = '';
-  document.getElementById('catModal').dataset.txId = tx.id;
 }
 
 function finishCategorize(tx, cat) {
-  const found = cachedTx.find(t => t.id === tx.id);
+  // Find by matching date+desc+amount since IDs can lose precision through Firebase
+  const found = cachedTx.find(t =>
+    t.date === tx.date && t.desc === tx.desc && t.amount === tx.amount && !t.category
+  ) || cachedTx.find(t => t.id === tx.id);
+
   if (found) {
     found.category = cat;
     fbSaveTx(monthKey(), cachedTx);
@@ -722,36 +776,192 @@ function finishCategorize(tx, cat) {
     fbSaveBudgets(cachedBudgets);
   }
 
-  pendingUncategorized = pendingUncategorized.filter(t => t.id !== tx.id);
-  const nextUncat = cachedTx.filter(t => !t.category && t.type === 'expense');
-  if (nextUncat.length > 0) {
-    showCatModal(nextUncat[0]);
-    pendingUncategorized = nextUncat;
-  } else {
-    document.getElementById('catModal').classList.remove('active');
-  }
+  selectedCat = null;
   render();
+
+  // Use setTimeout to let Firebase listener update cachedTx before showing next
+  setTimeout(() => {
+    const nextUncat = cachedTx.filter(t => !t.category && t.type === 'expense');
+    if (nextUncat.length > 0) {
+      pendingUncategorized = nextUncat;
+      showCatModal(nextUncat[0]);
+    } else {
+      document.getElementById('catModal').classList.remove('active');
+      pendingUncategorized = [];
+      currentCatTx = null;
+    }
+  }, 50);
 }
 
 function submitCustomCat() {
+  if (catProcessing) return;
   const v = document.getElementById('customCat').value.trim();
   if (!v) return;
-  const txId = parseFloat(document.getElementById('catModal').dataset.txId);
-  const tx = cachedTx.find(t => t.id === txId) || pendingUncategorized[0];
+  catProcessing = true;
+  const tx = currentCatTx;
   if (tx) finishCategorize(tx, v);
+  catProcessing = false;
 }
 
 function skipCategorize() {
-  if (pendingUncategorized.length > 1) {
-    pendingUncategorized.shift();
+  const nextUncat = cachedTx.filter(t =>
+    !t.category && t.type === 'expense' && (!currentCatTx || t.id !== currentCatTx.id)
+  );
+  if (nextUncat.length > 0) {
+    pendingUncategorized = nextUncat;
+    showCatModal(nextUncat[0]);
+  } else {
+    document.getElementById('catModal').classList.remove('active');
+    pendingUncategorized = [];
+    currentCatTx = null;
+  }
+}
+
+// ============ SPLIT TRANSACTION ============
+function openSplitModal() {
+  const tx = currentCatTx;
+  if (!tx) return;
+  // Hide cat modal, show split modal
+  document.getElementById('catModal').classList.remove('active');
+  document.getElementById('splitModalDesc').textContent =
+    `"${tx.desc}" — $${tx.amount.toFixed(2)} on ${tx.date}`;
+  // Start with 2 rows
+  document.getElementById('splitRows').innerHTML = '';
+  addSplitRow();
+  addSplitRow();
+  updateSplitRemaining();
+  document.getElementById('splitModal').classList.add('active');
+}
+
+function closeSplitModal() {
+  document.getElementById('splitModal').classList.remove('active');
+  // Re-show cat modal if we still have a transaction
+  if (currentCatTx) {
+    document.getElementById('catModal').classList.add('active');
+  }
+}
+
+function buildCatSelect() {
+  const sel = document.createElement('select');
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = 'Category...';
+  sel.appendChild(blank);
+  Object.keys(cachedBudgets).forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    sel.appendChild(opt);
+  });
+  return sel;
+}
+
+function addSplitRow() {
+  const container = document.getElementById('splitRows');
+  const row = document.createElement('div');
+  row.className = 'split-row';
+
+  const sel = buildCatSelect();
+  sel.addEventListener('change', updateSplitRemaining);
+
+  const inp = document.createElement('input');
+  inp.type = 'number';
+  inp.placeholder = '$0.00';
+  inp.step = '0.01';
+  inp.min = '0';
+  inp.addEventListener('input', updateSplitRemaining);
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'split-remove';
+  removeBtn.innerHTML = '&times;';
+  removeBtn.addEventListener('click', () => {
+    row.remove();
+    updateSplitRemaining();
+  });
+
+  row.appendChild(sel);
+  row.appendChild(inp);
+  row.appendChild(removeBtn);
+  container.appendChild(row);
+}
+
+function updateSplitRemaining() {
+  const tx = currentCatTx;
+  if (!tx) return;
+  const rows = document.querySelectorAll('#splitRows .split-row');
+  let allocated = 0;
+  rows.forEach(row => {
+    const val = parseFloat(row.querySelector('input').value) || 0;
+    allocated += val;
+  });
+  const remaining = tx.amount - allocated;
+  const el = document.getElementById('splitRemaining');
+  el.textContent = `Remaining: $${remaining.toFixed(2)} of $${tx.amount.toFixed(2)}`;
+  el.className = 'split-remaining' +
+    (Math.abs(remaining) < 0.01 ? ' exact' : remaining < 0 ? ' over' : '');
+}
+
+function confirmSplit() {
+  const tx = currentCatTx;
+  if (!tx) return;
+  const rows = document.querySelectorAll('#splitRows .split-row');
+  const splits = [];
+  let total = 0;
+
+  rows.forEach(row => {
+    const cat = row.querySelector('select').value;
+    const amt = parseFloat(row.querySelector('input').value) || 0;
+    if (cat && amt > 0) {
+      splits.push({ category: cat, amount: amt });
+      total += amt;
+    }
+  });
+
+  if (splits.length < 2) {
+    alert('Add at least 2 categories with amounts.');
+    return;
+  }
+  if (Math.abs(total - tx.amount) > 0.02) {
+    alert(`Amounts must add up to $${tx.amount.toFixed(2)}. Current total: $${total.toFixed(2)}.`);
+    return;
+  }
+
+  // Remove original transaction, add split transactions
+  const txIdx = cachedTx.findIndex(t =>
+    t.date === tx.date && t.desc === tx.desc && t.amount === tx.amount
+  );
+  if (txIdx === -1) { alert('Transaction not found.'); return; }
+
+  cachedTx.splice(txIdx, 1);
+  splits.forEach(s => {
+    cachedTx.push({
+      id: Date.now() + Math.random(),
+      date: tx.date,
+      desc: tx.desc,
+      amount: s.amount,
+      type: 'expense',
+      category: s.category,
+    });
+  });
+
+  fbSaveTx(monthKey(), cachedTx);
+  splits.forEach(s => learnCategory(tx.desc, s.category));
+
+  document.getElementById('splitModal').classList.remove('active');
+  currentCatTx = null;
+  selectedCat = null;
+  render();
+
+  // Check for more uncategorized
+  setTimeout(() => {
     const nextUncat = cachedTx.filter(t => !t.category && t.type === 'expense');
     if (nextUncat.length > 0) {
+      pendingUncategorized = nextUncat;
       showCatModal(nextUncat[0]);
-      return;
+    } else {
+      pendingUncategorized = [];
     }
-  }
-  document.getElementById('catModal').classList.remove('active');
-  pendingUncategorized = [];
+  }, 50);
 }
 
 // ============ BUDGET EDIT ============
