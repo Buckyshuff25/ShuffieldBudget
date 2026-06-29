@@ -764,7 +764,6 @@ function finishCategorize(tx, cat) {
 
   if (found) {
     found.category = cat;
-    fbSaveTx(monthKey(), cachedTx);
     learnCategory(found.desc, cat);
   }
 
@@ -776,21 +775,22 @@ function finishCategorize(tx, cat) {
     fbSaveBudgets(cachedBudgets);
   }
 
+  // Find next uncategorized BEFORE Firebase save replaces cachedTx
+  const nextUncat = cachedTx.filter(t => !t.category && t.type === 'expense');
   selectedCat = null;
-  render();
 
-  // Use setTimeout to let Firebase listener update cachedTx before showing next
-  setTimeout(() => {
-    const nextUncat = cachedTx.filter(t => !t.category && t.type === 'expense');
-    if (nextUncat.length > 0) {
-      pendingUncategorized = nextUncat;
-      showCatModal(nextUncat[0]);
-    } else {
-      document.getElementById('catModal').classList.remove('active');
-      pendingUncategorized = [];
-      currentCatTx = null;
-    }
-  }, 50);
+  // Now save to Firebase (this triggers listener which replaces cachedTx and calls render)
+  fbSaveTx(monthKey(), cachedTx);
+
+  // Advance to next or close modal
+  if (nextUncat.length > 0) {
+    pendingUncategorized = nextUncat;
+    showCatModal(nextUncat[0]);
+  } else {
+    document.getElementById('catModal').classList.remove('active');
+    pendingUncategorized = [];
+    currentCatTx = null;
+  }
 }
 
 function submitCustomCat() {
